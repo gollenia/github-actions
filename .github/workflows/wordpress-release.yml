@@ -51,6 +51,8 @@ jobs:
 
           if [ -f "$DIR/functions.php" ]; then
             sha256sum "$DIR/functions.php" | cut -d' ' -f1 > "$DIR/checksum.txt"
+            echo "checksum calculated".
+            echo "$DIR/checksum.txt"
           fi         
 
       - name: Prepare zip
