@@ -1,4 +1,4 @@
-name: Build & Release WordPress Plugin
+name: Build & Release WordPress Plugin/Theme
 
 on:
   workflow_call:
@@ -25,8 +25,32 @@ jobs:
           npm ci
           npm run build
 
+      - name: Install Composer 
+        uses: php-actions/composer@v6
+        with:
+          args: --ignore-platform-reqs
+        
+      - name: Install composer dependencies (if composer.json exists)
+        run: |
+            DIR="${{ github.event.repository.name }}"
+        
+            if [ -f "$DIR/composer.json" ]; then
+              cd "$DIR"
+              composer install --no-dev --prefer-dist --optimize-autoloader --ignore-platform-reqs
+            else
+              echo "No composer.json found – skipping Composer step."
+            fi
+
       - name: Clean up files
         run: rm -rf node_modules src .git .github tests .DS_Store .prettierrc .eslintrc .editorconfig package-lock.json package.json webpack.config.js tsconfig.json
+
+      - name: Detect main file and create checksum
+        run: |
+          DIR="${{ github.event.repository.name }}"
+
+          if [ -f "$DIR/functions.php" ]; then
+            sha256sum "$DIR/functions.php" | cut -d' ' -f1 > "$DIR/checksum.txt"
+          fi         
 
       - name: Prepare zip
         uses: thedoctor0/zip-release@0.7.5
