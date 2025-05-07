@@ -47,24 +47,14 @@ jobs:
 
       - name: Detect main file and create checksum
         run: |
-          echo "Working directory: $(pwd)"
-          echo "Repository directory: ${{ github.event.repository.name }}"
-          echo "Listing root:"
-          ls -lah
-      
-          DIR="${{ github.event.repository.name }}"
-      
-          echo "Listing contents of $DIR:"
-          ls -lah "$DIR"
-      
-          FILE="$DIR/functions.php"
-          if [ -f "$FILE" ]; then
-            echo "Found $FILE"
-            sha256sum "$FILE" | cut -d' ' -f1 > "$DIR/checksum.txt"
-            echo "Checksum created:"
-            cat "$DIR/checksum.txt"
+          if [ -f "functions.php" ]; then
+            echo "Found functions.php"
+            sha256sum "functions.php" | cut -d' ' -f1 > "checksum.txt"
+            echo "checksum.txt created:"
+            cat checksum.txt
           else
-            echo "❌ File not found: $FILE"
+            echo "functions.php not found in root."
+            ls -lah
           fi        
 
       - name: Prepare zip
