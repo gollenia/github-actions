@@ -47,13 +47,25 @@ jobs:
 
       - name: Detect main file and create checksum
         run: |
+          echo "Working directory: $(pwd)"
+          echo "Repository directory: ${{ github.event.repository.name }}"
+          echo "Listing root:"
+          ls -lah
+      
           DIR="${{ github.event.repository.name }}"
-
-          if [ -f "$DIR/functions.php" ]; then
-            sha256sum "$DIR/functions.php" | cut -d' ' -f1 > "$DIR/checksum.txt"
-            echo "checksum calculated".
-            echo "$DIR/checksum.txt"
-          fi         
+      
+          echo "Listing contents of $DIR:"
+          ls -lah "$DIR"
+      
+          FILE="$DIR/functions.php"
+          if [ -f "$FILE" ]; then
+            echo "Found $FILE"
+            sha256sum "$FILE" | cut -d' ' -f1 > "$DIR/checksum.txt"
+            echo "Checksum created:"
+            cat "$DIR/checksum.txt"
+          else
+            echo "❌ File not found: $FILE"
+          fi        
 
       - name: Prepare zip
         uses: thedoctor0/zip-release@0.7.5
