@@ -75,3 +75,5 @@ jobs:
           tag: ${{ inputs.tag }}
           name: Release ${{ inputs.tag }}
           generateReleaseNotes: true
+          allowUpdates: true
+          replaceArtifacts: true
