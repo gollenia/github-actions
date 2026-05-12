@@ -33,7 +33,7 @@ jobs:
         
       - name: Install composer dependencies (if composer.json exists)
         run: |
-            DIR="${{ github.event.repository.name }}"
+            DIR="../${{ github.event.repository.name }}"
         
             if [ -f "$DIR/composer.json" ]; then
               cd "$DIR"
