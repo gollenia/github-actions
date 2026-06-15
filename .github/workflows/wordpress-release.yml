@@ -7,71 +7,130 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Create Release Package
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+
+      - name: Detect project metadata
+        id: project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f "style.css" ] && grep -q "Theme Name:" style.css; then
+            PROJECT_TYPE="theme"
+            MAIN_FILE="style.css"
+          else
+            MAIN_FILE="$(grep -rl --include='*.php' 'Plugin Name:' . | head -n 1 || true)"
+            PROJECT_TYPE="plugin"
+          fi
+
+          if [ -z "${MAIN_FILE:-}" ] || [ ! -f "$MAIN_FILE" ]; then
+            echo "Could not detect a WordPress plugin or theme entry file."
+            ls -lah
+            exit 1
+          fi
+
+          PROJECT_SLUG="${GITHUB_REPOSITORY##*/}"
+          STAGING_DIR="$RUNNER_TEMP/$PROJECT_SLUG"
+          ZIP_FILE="$PROJECT_SLUG.zip"
+
+          echo "project_type=$PROJECT_TYPE" >> "$GITHUB_OUTPUT"
+          echo "main_file=$MAIN_FILE" >> "$GITHUB_OUTPUT"
+          echo "project_slug=$PROJECT_SLUG" >> "$GITHUB_OUTPUT"
+          echo "staging_dir=$STAGING_DIR" >> "$GITHUB_OUTPUT"
+          echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js with npm cache
+        if: ${{ hashFiles('package-lock.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        if: ${{ hashFiles('package.json') != '' && hashFiles('package-lock.json') == '' }}
+        uses: actions/setup-node@v4
         with:
           node-version: 24
 
-      - name: Install dependencies and build
-        run: |
-          npm ci
-          npm run build
+      - name: Install Node dependencies
+        if: ${{ hashFiles('package-lock.json') != '' }}
+        run: npm ci
+
+      - name: Install Node dependencies without lockfile
+        if: ${{ hashFiles('package.json') != '' && hashFiles('package-lock.json') == '' }}
+        run: npm install
+
+      - name: Build frontend assets
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm run build
 
       - name: Set up PHP with Composer
+        if: ${{ hashFiles('composer.json') != '' }}
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
           tools: composer
-        
-      - name: Install composer dependencies (if composer.json exists)
-        run: |
-            DIR="../${{ github.event.repository.name }}"
-        
-            if [ -f "$DIR/composer.json" ]; then
-              cd "$DIR"
-              composer install --no-dev --prefer-dist --optimize-autoloader --ignore-platform-reqs
-            else
-              echo "No composer.json found – skipping Composer step."
-            fi
 
-      - name: Clean up files
-        run: rm -rf node_modules src .git .github tests .DS_Store .prettierrc .eslintrc .editorconfig package-lock.json package.json webpack.config.js tsconfig.json
+      - name: Install Composer dependencies
+        if: ${{ hashFiles('composer.json') != '' }}
+        run: composer install --no-dev --prefer-dist --optimize-autoloader --ignore-platform-reqs
 
-      - name: Detect main file and create checksum
+      - name: Prepare release contents
+        shell: bash
         run: |
-          if [ -f "functions.php" ]; then
-            echo "Found functions.php"
-            sha256sum "functions.php" | cut -d' ' -f1 > "checksum.txt"
-            echo "checksum.txt created:"
-            cat checksum.txt
-          else
-            echo "functions.php not found in root."
-            ls -lah
-          fi        
+          set -euo pipefail
+
+          mkdir -p "${{ steps.project.outputs.staging_dir }}"
+
+          rsync -a ./ "${{ steps.project.outputs.staging_dir }}/" \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude "node_modules" \
+            --exclude "tests" \
+            --exclude ".DS_Store" \
+            --exclude ".prettierrc" \
+            --exclude ".eslintrc" \
+            --exclude ".editorconfig" \
+            --exclude "package-lock.json" \
+            --exclude "package.json" \
+            --exclude "webpack.config.js" \
+            --exclude "tsconfig.json"
+
+      - name: Create checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "${{ steps.project.outputs.staging_dir }}"
+          sha256sum "${{ steps.project.outputs.main_file }}" | cut -d' ' -f1 > checksum.txt
+          cat checksum.txt
 
       - name: Prepare zip
         uses: thedoctor0/zip-release@0.7.6
         with:
-          type: 'zip'
-          filename: '${{ github.event.repository.name }}.zip'
-          directory: '../'
-          path: '${{ github.event.repository.name }}'
+          type: zip
+          filename: '${{ steps.project.outputs.zip_file }}'
+          directory: '${{ runner.temp }}'
+          path: '${{ steps.project.outputs.project_slug }}'
 
       - name: Move zip to workspace
-        run: mv ../${{ github.event.repository.name }}.zip .
+        run: mv "${{ runner.temp }}/${{ steps.project.outputs.zip_file }}" .
 
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1.21.0
         with:
-          artifacts: '${{ github.event.repository.name }}.zip'
+          artifacts: '${{ steps.project.outputs.zip_file }}'
           tag: ${{ inputs.tag }}
           name: Release ${{ inputs.tag }}
           generateReleaseNotes: true
