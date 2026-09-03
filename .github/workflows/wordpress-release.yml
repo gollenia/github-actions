@@ -49,6 +49,17 @@ jobs:
           echo "staging_dir=$STAGING_DIR" >> "$GITHUB_OUTPUT"
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
 
+      - name: Set up PHP with Composer
+        if: ${{ hashFiles('composer.json') != '' }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: composer
+
+      - name: Install Composer dependencies
+        if: ${{ hashFiles('composer.json') != '' }}
+        run: composer install --no-dev --prefer-dist --optimize-autoloader --ignore-platform-reqs  
+
       - name: Setup Node.js with npm cache
         if: ${{ hashFiles('package-lock.json') != '' }}
         uses: actions/setup-node@v4
@@ -74,17 +85,6 @@ jobs:
       - name: Build frontend assets
         if: ${{ hashFiles('package.json') != '' }}
         run: npm run build
-
-      - name: Set up PHP with Composer
-        if: ${{ hashFiles('composer.json') != '' }}
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.5'
-          tools: composer
-
-      - name: Install Composer dependencies
-        if: ${{ hashFiles('composer.json') != '' }}
-        run: composer install --no-dev --prefer-dist --optimize-autoloader --ignore-platform-reqs
 
       - name: Prepare release contents
         shell: bash
