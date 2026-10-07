@@ -6,6 +6,10 @@ on:
       tag:
         required: true
         type: string
+      prune_mpdf_fonts:
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -106,6 +110,15 @@ jobs:
             --exclude "package.json" \
             --exclude "webpack.config.js" \
             --exclude "tsconfig.json"
+
+          if [ "${{ inputs.prune_mpdf_fonts }}" = "true" ] && [ -d "${{ steps.project.outputs.staging_dir }}/vendor/mpdf/mpdf/ttfonts" ]; then
+            find "${{ steps.project.outputs.staging_dir }}/vendor/mpdf/mpdf/ttfonts" -type f \
+              ! -name "DejaVuSans.ttf" \
+              ! -name "DejaVuSans-Bold.ttf" \
+              ! -name "DejaVuSans-Oblique.ttf" \
+              ! -name "DejaVuSans-BoldOblique.ttf" \
+              -delete
+          fi
 
       - name: Create checksum
         shell: bash
